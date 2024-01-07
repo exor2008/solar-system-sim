@@ -1,27 +1,15 @@
-use nalgebra::Vector3;
-use solar_system_sim::{constants::*, Body};
+use bevy::prelude::*;
+// use nalgebra::Vector3;
+use solar_system_sim::{attraction, scroll_camera, spawn_bodies, update};
 
 fn main() {
-    let mut sun = Body::new(
-        0,
-        Vector3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.0, 0.0, 0.0),
-        SUN_MASS,
-    );
-
-    let mut earth = Body::new(
-        1,
-        Vector3::new(-1.0 * AU, 0.0, 0.0),
-        Vector3::new(0.0, EARTH_VEL, 0.0),
-        EARTH_MASS,
-    );
-
-    loop {
-        for i in 0..2 {
-            let mut others = vec![&mut sun, &mut earth];
-            let body: &mut Body = others.remove(i);
-            body.update(others);
-        }
-        println!("{}", earth.scaled_coord());
-    }
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .insert_resource(AmbientLight {
+            brightness: 1.0,
+            ..default()
+        })
+        .add_systems(Startup, spawn_bodies)
+        .add_systems(FixedUpdate, (attraction, update, scroll_camera))
+        .run();
 }
