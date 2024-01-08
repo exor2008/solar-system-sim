@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 // use nalgebra::Vector3;
-use solar_system_sim::{attraction, scroll_camera, spawn_bodies, update};
+use solar_system_sim::{
+    attraction, look_at_target, scroll_camera, spawn_bodies, switch_track, update,
+};
 
 fn main() {
     App::new()
@@ -10,6 +12,15 @@ fn main() {
             ..default()
         })
         .add_systems(Startup, spawn_bodies)
-        .add_systems(FixedUpdate, (attraction, update, scroll_camera))
+        .add_systems(
+            FixedUpdate,
+            (
+                attraction,
+                update,
+                scroll_camera,
+                switch_track,
+                look_at_target,
+            ),
+        )
         .run();
 }

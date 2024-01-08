@@ -5,18 +5,32 @@ use constants::*;
 
 #[derive(Component, Default)]
 pub struct Coord(Vec3);
+
 #[derive(Component, Default)]
 pub struct Velocity(Vec3);
+
 #[derive(Component, Default)]
 pub struct Mass(f32);
+
+#[derive(Component, Default)]
+pub struct Ordinal(usize);
+
+#[derive(Component, Default)]
+pub struct TargetZ(f32);
+
+#[derive(Component, Default)]
+pub struct Radius(f32);
+
 #[derive(Default, Bundle)]
 struct BodyBundle {
     pbr: PbrBundle,
     mass: Mass,
-    // coord: Coord,
     velocity: Velocity,
-    // force: Force,
+    radius: Radius,
 }
+
+#[derive(Default, Component)]
+struct Star;
 
 pub fn spawn_bodies(
     mut commands: Commands,
@@ -46,6 +60,7 @@ pub fn spawn_bodies(
         },
         mass: Mass(SUN_MASS),
         velocity: Velocity(Vec3::ZERO),
+        radius: Radius(SUN_RADIUS),
         // ..default()
     };
 
@@ -65,19 +80,25 @@ pub fn spawn_bodies(
         },
         mass: Mass(EARTH_MASS),
         velocity: Velocity(Vec3::new(0.0, EARTH_VEL, 0.0)),
+        radius: Radius(EARTH_RADIUS),
         // ..default()
     };
 
-    commands.spawn(sun);
+    commands.spawn((sun, Star));
     commands.spawn(earth);
 
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 0.0, AU * 3.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+    let position = Transform::from_xyz(0.0, 0.0, AU * 3.0).looking_at(Vec3::ZERO, Vec3::Y);
+    commands.spawn((
+        Camera3dBundle {
+            transform: position,
+            ..default()
+        },
+        Ordinal(0),
+        TargetZ(AU * 3.0),
+    ));
 }
 
-pub fn attraction(time: Res<Time>, mut query: Query<(&Mass, &GlobalTransform, &mut Velocity)>) {
+pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &GlobalTransform, &mut Velocity)>) {
     let mut iter = query.iter_combinations_mut();
     while let Some([(Mass(m1), transform1, mut vel1), (Mass(m2), transform2, mut vel2)]) =
         iter.fetch_next()
@@ -96,7 +117,7 @@ pub fn attraction(time: Res<Time>, mut query: Query<(&Mass, &GlobalTransform, &m
 
         let force1 = Vec3::new(x1, y1, z1);
 
-        vel1.0 += force1 * time.delta_seconds();
+        vel1.0 += force1 * TIMESTEP; //time.delta_seconds();
 
         let diff2 = transform1.translation() - transform2.translation();
 
@@ -115,29 +136,62 @@ pub fn attraction(time: Res<Time>, mut query: Query<(&Mass, &GlobalTransform, &m
     }
 }
 
-pub fn update(time: Res<Time>, mut query: Query<(&Velocity, &mut Transform)>) {
+pub fn update(mut query: Query<(&Velocity, &mut Transform)>) {
     for (vel, mut transform) in &mut query {
         transform.translation += vel.0 * TIMESTEP; //* time.delta_seconds();
     }
 }
 
-// fn look_at_star(mut camera: Query<&mut Transform, With<Camera>>) {
-//     let mut camera = camera.single_mut();
-//     let new_rotation = camera
-//         .looking_at(Vec3::ZERO, Vec3::Y)
-//         .rotation
-//         .lerp(camera.rotation, 0.1);
-//     camera.rotation = new_rotation;
-// }
+pub fn look_at_target(
+    mut camera: Query<(&Ordinal, &TargetZ, &mut Transform, With<Camera>), With<Camera>>,
+    bodies: Query<(&GlobalTransform, With<Mass>)>,
+) {
+    let (ordinal, target_z, mut camera_transform, _) = camera.single_mut();
+
+    let (body_transform, _) = bodies.iter().nth(ordinal.0).unwrap();
+
+    let new_target = Vec3::new(
+        body_transform.translation().x,
+        body_transform.translation().y,
+        target_z.0,
+    );
+
+    let new_translation = camera_transform.translation.lerp(new_target, 0.2);
+    camera_transform.translation = new_target;
+}
 
 pub fn scroll_camera(
     mut ev_scroll: EventReader<MouseWheel>,
-    mut query: Query<(&mut Transform, With<Camera>)>,
+    mut camera: Query<(&mut TargetZ, With<Camera>)>,
 ) {
-    for (mut transform, _camera) in query.iter_mut() {
-        for ev in ev_scroll.read() {
-            // Adjust the camera's Z translation based on the scroll delta
-            transform.translation.z -= ev.y * AU * 0.2; // Adjust the factor as needed
+    let (mut target_z, _) = camera.single_mut();
+
+    for ev in ev_scroll.read() {
+        target_z.0 -= ev.y * (target_z.0) / 4.0;
+    }
+}
+
+pub fn switch_track(
+    keyboard_input: Res<Input<KeyCode>>,
+    bodies: Query<(&GlobalTransform, With<Mass>)>,
+    mut camera: Query<&mut Ordinal, With<Camera>>,
+) {
+    let mut ordinal = camera.single_mut();
+    let count = bodies.iter().count();
+
+    if keyboard_input.just_pressed(KeyCode::Left) {
+        ordinal.0 = if ordinal.0 == 0 {
+            count - 1
+        } else {
+            ordinal.0 - 1
+        }
+    }
+
+    if keyboard_input.just_pressed(KeyCode::Right) {
+        ordinal.0 = if ordinal.0 == count - 1 {
+            0
+        } else {
+            ordinal.0 + 1
         }
     }
 }
