@@ -104,7 +104,7 @@ pub fn spawn_bodies(
         TargetZ(AU * 3.0),
     ));
 
-    config.line_width = 5.0;
+    config.line_width = 3.0;
 
     commands.init_resource::<Lerp>();
 }
@@ -159,15 +159,20 @@ pub fn update(mut bodies: Query<(&Velocity, &mut Transform, &mut Coord)>) {
     }
 }
 
-pub fn draw_gizmos(mut gizmos: Gizmos, bodies: Query<&Coord>) {
+pub fn draw_gizmos(
+    mut gizmos: Gizmos,
+    bodies: Query<&Coord>,
+    camera: Query<&TargetZ, With<Camera>>,
+) {
+    let target_z = camera.single();
     for coord in &bodies {
-        let r = (SUN_RADIUS * SCALE) as f32; //target_z.0 / 1.0;
+        let r = (target_z.0 * 0.01 * SCALE) as f32; //target_z.0 / 1.0;
         gizmos.circle_2d((coord.0 * SCALE).as_vec3().xy(), r, Color::RED);
     }
 }
 
 pub fn look_at_target(
-    mut camera: Query<(&Ordinal, &TargetZ, &mut Transform, With<Camera>), With<Camera>>,
+    mut camera: Query<(&Ordinal, &TargetZ, &mut Transform, With<Camera>)>,
     bodies: Query<(&Coord, With<Mass>)>,
     lerp: Res<Lerp>,
 ) {
@@ -184,9 +189,9 @@ pub fn look_at_target(
 
 pub fn scroll_camera(
     mut ev_scroll: EventReader<MouseWheel>,
-    mut camera: Query<(&mut TargetZ, With<Camera>)>,
+    mut camera: Query<&mut TargetZ, With<Camera>>,
 ) {
-    let (mut target_z, _) = camera.single_mut();
+    let mut target_z = camera.single_mut();
 
     for ev in ev_scroll.read() {
         target_z.0 -= ev.y as f64 * (target_z.0) / 4.0;
