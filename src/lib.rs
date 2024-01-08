@@ -1,32 +1,36 @@
 pub mod constants;
 
-use bevy::{input::mouse::MouseWheel, prelude::*};
+use bevy::{input::mouse::MouseWheel, math::DVec3, prelude::*};
 use constants::*;
 
 #[derive(Component, Default)]
-pub struct Coord(Vec3);
+pub struct Coord(DVec3);
 
 #[derive(Component, Default)]
-pub struct Velocity(Vec3);
+pub struct Velocity(DVec3);
 
 #[derive(Component, Default)]
-pub struct Mass(f32);
+pub struct Mass(f64);
 
 #[derive(Component, Default)]
 pub struct Ordinal(usize);
 
 #[derive(Component, Default)]
-pub struct TargetZ(f32);
+pub struct TargetZ(f64);
 
-#[derive(Component, Default)]
-pub struct Radius(f32);
+#[derive(Resource, Default)]
+pub struct Lerp(f32);
+
+// #[derive(Component, Default)]
+// pub struct Radius(f64);
 
 #[derive(Default, Bundle)]
 struct BodyBundle {
     pbr: PbrBundle,
     mass: Mass,
     velocity: Velocity,
-    radius: Radius,
+    // radius: Radius,
+    coord: Coord,
 }
 
 #[derive(Default, Component)]
@@ -36,6 +40,7 @@ pub fn spawn_bodies(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut config: ResMut<GizmoConfig>,
 ) {
     // Sun
     let sun = BodyBundle {
@@ -46,7 +51,7 @@ pub fn spawn_bodies(
             },
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
-                    radius: SUN_RADIUS,
+                    radius: (SUN_RADIUS * SCALE) as f32,
                     subdivisions: 3,
                 })
                 .unwrap(),
@@ -59,18 +64,18 @@ pub fn spawn_bodies(
             ..default()
         },
         mass: Mass(SUN_MASS),
-        velocity: Velocity(Vec3::ZERO),
-        radius: Radius(SUN_RADIUS),
-        // ..default()
+        velocity: Velocity(DVec3::ZERO),
+        // radius: Radius(SUN_RADIUS),
+        coord: Coord(DVec3::ZERO), // ..default()
     };
 
     // Earth
     let earth: BodyBundle = BodyBundle {
         pbr: PbrBundle {
-            transform: Transform::from_xyz(AU, 0.0, 0.0),
+            transform: Transform::from_xyz((AU * SCALE) as f32, 0.0, 0.0),
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
-                    radius: EARTH_RADIUS,
+                    radius: (EARTH_RADIUS * SCALE) as f32,
                     subdivisions: 3,
                 })
                 .unwrap(),
@@ -79,15 +84,17 @@ pub fn spawn_bodies(
             ..default()
         },
         mass: Mass(EARTH_MASS),
-        velocity: Velocity(Vec3::new(0.0, EARTH_VEL, 0.0)),
-        radius: Radius(EARTH_RADIUS),
+        velocity: Velocity(DVec3::new(0.0, EARTH_VEL, 0.0)),
+        // radius: Radius(EARTH_RADIUS),
+        coord: Coord(DVec3::new(AU, 0.0, 0.0)),
         // ..default()
     };
 
     commands.spawn((sun, Star));
     commands.spawn(earth);
 
-    let position = Transform::from_xyz(0.0, 0.0, AU * 3.0).looking_at(Vec3::ZERO, Vec3::Y);
+    let position =
+        Transform::from_xyz(0.0, 0.0, (AU * 3.0 * SCALE) as f32).looking_at(Vec3::ZERO, Vec3::Y);
     commands.spawn((
         Camera3dBundle {
             transform: position,
@@ -96,14 +103,17 @@ pub fn spawn_bodies(
         Ordinal(0),
         TargetZ(AU * 3.0),
     ));
+
+    config.line_width = 5.0;
+
+    commands.init_resource::<Lerp>();
 }
 
-pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &GlobalTransform, &mut Velocity)>) {
+pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coord)>) {
     let mut iter = query.iter_combinations_mut();
-    while let Some([(Mass(m1), transform1, mut vel1), (Mass(m2), transform2, mut vel2)]) =
-        iter.fetch_next()
+    while let Some([(Mass(m1), mut vel1, coord1), (Mass(m2), mut vel2, coord2)]) = iter.fetch_next()
     {
-        let diff1 = transform2.translation() - transform1.translation();
+        let diff1 = coord2.0 - coord1.0;
         let distance = diff1.length();
 
         let phi1 = diff1.y.atan2(diff1.x);
@@ -115,11 +125,11 @@ pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &GlobalTransform, &
         let y1 = force1 * theta1.sin() * phi1.sin();
         let z1 = force1 * theta1.cos();
 
-        let force1 = Vec3::new(x1, y1, z1);
+        let force1 = DVec3::new(x1, y1, z1);
 
         vel1.0 += force1 * TIMESTEP; //time.delta_seconds();
 
-        let diff2 = transform1.translation() - transform2.translation();
+        let diff2 = coord1.0 - coord2.0;
 
         let phi2 = diff2.y.atan2(diff2.x);
         let theta2 = (diff2.z / distance).acos();
@@ -130,34 +140,46 @@ pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &GlobalTransform, &
         let y2 = force2 * theta2.sin() * phi2.sin();
         let z2 = force2 * theta2.cos();
 
-        let force2 = Vec3::new(x2, y2, z2);
+        let force2 = DVec3::new(x2, y2, z2);
 
         vel2.0 += force2 * TIMESTEP; //* time.delta_seconds();
     }
 }
 
-pub fn update(mut query: Query<(&Velocity, &mut Transform)>) {
-    for (vel, mut transform) in &mut query {
-        transform.translation += vel.0 * TIMESTEP; //* time.delta_seconds();
+pub fn update_lerp(mut lerp: ResMut<Lerp>) {
+    lerp.0 += 0.05;
+    lerp.0 = lerp.0.min(1.0);
+    // println!("{}", lerp.0);
+}
+
+pub fn update(mut bodies: Query<(&Velocity, &mut Transform, &mut Coord)>) {
+    for (vel, mut transform, mut coord) in &mut bodies {
+        coord.0 += vel.0 * TIMESTEP; //* time.delta_seconds();
+        transform.translation = (coord.0 * SCALE).as_vec3();
+    }
+}
+
+pub fn draw_gizmos(mut gizmos: Gizmos, bodies: Query<&Coord>) {
+    for coord in &bodies {
+        let r = (SUN_RADIUS * SCALE) as f32; //target_z.0 / 1.0;
+        gizmos.circle_2d((coord.0 * SCALE).as_vec3().xy(), r, Color::RED);
     }
 }
 
 pub fn look_at_target(
     mut camera: Query<(&Ordinal, &TargetZ, &mut Transform, With<Camera>), With<Camera>>,
-    bodies: Query<(&GlobalTransform, With<Mass>)>,
+    bodies: Query<(&Coord, With<Mass>)>,
+    lerp: Res<Lerp>,
 ) {
     let (ordinal, target_z, mut camera_transform, _) = camera.single_mut();
 
-    let (body_transform, _) = bodies.iter().nth(ordinal.0).unwrap();
+    let (coord, _) = bodies.iter().nth(ordinal.0).unwrap();
 
-    let new_target = Vec3::new(
-        body_transform.translation().x,
-        body_transform.translation().y,
-        target_z.0,
-    );
+    let coord = (coord.0 * SCALE).as_vec3();
+    let new_target = Vec3::new(coord.x, coord.y, (target_z.0 * SCALE) as f32);
 
-    let new_translation = camera_transform.translation.lerp(new_target, 0.2);
-    camera_transform.translation = new_target;
+    let new_translation = camera_transform.translation.lerp(new_target, lerp.0);
+    camera_transform.translation = new_translation;
 }
 
 pub fn scroll_camera(
@@ -167,7 +189,7 @@ pub fn scroll_camera(
     let (mut target_z, _) = camera.single_mut();
 
     for ev in ev_scroll.read() {
-        target_z.0 -= ev.y * (target_z.0) / 4.0;
+        target_z.0 -= ev.y as f64 * (target_z.0) / 4.0;
     }
 }
 
@@ -175,11 +197,13 @@ pub fn switch_track(
     keyboard_input: Res<Input<KeyCode>>,
     bodies: Query<(&GlobalTransform, With<Mass>)>,
     mut camera: Query<&mut Ordinal, With<Camera>>,
+    mut lerp: ResMut<Lerp>,
 ) {
     let mut ordinal = camera.single_mut();
     let count = bodies.iter().count();
 
     if keyboard_input.just_pressed(KeyCode::Left) {
+        lerp.0 = 0.1;
         ordinal.0 = if ordinal.0 == 0 {
             count - 1
         } else {
@@ -188,6 +212,7 @@ pub fn switch_track(
     }
 
     if keyboard_input.just_pressed(KeyCode::Right) {
+        lerp.0 = 0.1;
         ordinal.0 = if ordinal.0 == count - 1 {
             0
         } else {
