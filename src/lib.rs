@@ -90,8 +90,30 @@ pub fn spawn_bodies(
         // ..default()
     };
 
+    // Moon
+    let moon: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz(((AU + MOON_SHIFT) * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (MOON_RADIUS * SCALE) as f32,
+                    subdivisions: 3,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(Color::rgb(0.2, 0.2, 0.2).into()),
+            ..default()
+        },
+        mass: Mass(MOON_MASS),
+        velocity: Velocity(DVec3::new(0.0, MOON_VEL + EARTH_VEL, 0.0)),
+        // radius: Radius(EARTH_RADIUS),
+        coord: Coord(DVec3::new(AU + MOON_SHIFT, 0.0, 0.0)),
+        // ..default()
+    };
+
     commands.spawn((sun, Star));
     commands.spawn(earth);
+    commands.spawn(moon);
 
     let position =
         Transform::from_xyz(0.0, 0.0, (AU * 3.0 * SCALE) as f32).looking_at(Vec3::ZERO, Vec3::Y);
@@ -166,7 +188,7 @@ pub fn draw_gizmos(
 ) {
     let target_z = camera.single();
     for coord in &bodies {
-        let r = (target_z.0 * 0.01 * SCALE) as f32; //target_z.0 / 1.0;
+        let r = (target_z.0 * 0.01 * SCALE) as f32;
         gizmos.circle_2d((coord.0 * SCALE).as_vec3().xy(), r, Color::RED);
     }
 }
