@@ -18,19 +18,19 @@ pub struct Ordinal(usize);
 #[derive(Component, Default)]
 pub struct TargetZ(f64);
 
+#[derive(Component, Default)]
+pub struct Trajectory(Vec<DVec3>);
+
 #[derive(Resource, Default)]
 pub struct Lerp(f32);
-
-// #[derive(Component, Default)]
-// pub struct Radius(f64);
 
 #[derive(Default, Bundle)]
 struct BodyBundle {
     pbr: PbrBundle,
     mass: Mass,
     velocity: Velocity,
-    // radius: Radius,
     coord: Coord,
+    trajectory: Trajectory,
 }
 
 #[derive(Default, Component)]
@@ -65,14 +65,54 @@ pub fn spawn_bodies(
         },
         mass: Mass(SUN_MASS),
         velocity: Velocity(DVec3::ZERO),
-        // radius: Radius(SUN_RADIUS),
-        coord: Coord(DVec3::ZERO), // ..default()
+        coord: Coord(DVec3::ZERO),
+        ..default()
+    };
+
+    // Mercury
+    let mercury: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((MERCURY_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (MERCURY_RADIUS * SCALE) as f32,
+                    subdivisions: 3,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()),
+            ..default()
+        },
+        mass: Mass(MERCURY_MASS),
+        velocity: Velocity(DVec3::new(0.0, MERCURY_VEL, 0.0)),
+        coord: Coord(DVec3::new(MERCURY_DISTANCE, 0.0, 0.0)),
+        ..default()
+    };
+
+    // Venus
+    let venus: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((VENUS_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (VENUS_RADIUS * SCALE) as f32,
+                    subdivisions: 3,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(Color::rgb(0.52, 0.0, 1.0).into()),
+            ..default()
+        },
+        mass: Mass(VENUS_MASS),
+        velocity: Velocity(DVec3::new(0.0, VENUS_VEL, 0.0)),
+        coord: Coord(DVec3::new(VENUS_DISTANCE, 0.0, 0.0)),
+        ..default()
     };
 
     // Earth
     let earth: BodyBundle = BodyBundle {
         pbr: PbrBundle {
-            transform: Transform::from_xyz((AU * SCALE) as f32, 0.0, 0.0),
+            transform: Transform::from_xyz((EARTH_DISTANCE * SCALE) as f32, 0.0, 0.0),
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
                     radius: (EARTH_RADIUS * SCALE) as f32,
@@ -85,15 +125,18 @@ pub fn spawn_bodies(
         },
         mass: Mass(EARTH_MASS),
         velocity: Velocity(DVec3::new(0.0, EARTH_VEL, 0.0)),
-        // radius: Radius(EARTH_RADIUS),
-        coord: Coord(DVec3::new(AU, 0.0, 0.0)),
-        // ..default()
+        coord: Coord(DVec3::new(EARTH_DISTANCE, 0.0, 0.0)),
+        ..default()
     };
 
     // Moon
     let moon: BodyBundle = BodyBundle {
         pbr: PbrBundle {
-            transform: Transform::from_xyz(((AU + MOON_SHIFT) * SCALE) as f32, 0.0, 0.0),
+            transform: Transform::from_xyz(
+                ((EARTH_DISTANCE + MOON_DISTANCE) * SCALE) as f32,
+                0.0,
+                0.0,
+            ),
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
                     radius: (MOON_RADIUS * SCALE) as f32,
@@ -105,15 +148,37 @@ pub fn spawn_bodies(
             ..default()
         },
         mass: Mass(MOON_MASS),
-        velocity: Velocity(DVec3::new(0.0, MOON_VEL + EARTH_VEL, 0.0)),
-        // radius: Radius(EARTH_RADIUS),
-        coord: Coord(DVec3::new(AU + MOON_SHIFT, 0.0, 0.0)),
-        // ..default()
+        velocity: Velocity(DVec3::new(0.0, EARTH_VEL + MOON_VEL, 0.0)),
+        coord: Coord(DVec3::new(EARTH_DISTANCE + MOON_DISTANCE, 0.0, 0.0)),
+        ..default()
+    };
+
+    // Mars
+    let mars: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((MARS_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (MARS_RADIUS * SCALE) as f32,
+                    subdivisions: 3,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(Color::rgb(0.83, 0.35, 0.21).into()),
+            ..default()
+        },
+        mass: Mass(MARS_MASS),
+        velocity: Velocity(DVec3::new(0.0, MARS_VEL, 0.0)),
+        coord: Coord(DVec3::new(MARS_DISTANCE, 0.0, 0.0)),
+        ..default()
     };
 
     commands.spawn((sun, Star));
+    commands.spawn(mercury);
+    commands.spawn(venus);
     commands.spawn(earth);
     commands.spawn(moon);
+    commands.spawn(mars);
 
     let position =
         Transform::from_xyz(0.0, 0.0, (AU * 3.0 * SCALE) as f32).looking_at(Vec3::ZERO, Vec3::Y);
@@ -171,25 +236,34 @@ pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coo
 pub fn update_lerp(mut lerp: ResMut<Lerp>) {
     lerp.0 += 0.05;
     lerp.0 = lerp.0.min(1.0);
-    // println!("{}", lerp.0);
 }
 
-pub fn update(mut bodies: Query<(&Velocity, &mut Transform, &mut Coord)>) {
-    for (vel, mut transform, mut coord) in &mut bodies {
+pub fn update_position(
+    mut bodies: Query<(&Velocity, &mut Transform, &mut Coord, &mut Trajectory)>,
+) {
+    for (vel, mut transform, mut coord, mut trajectory) in &mut bodies {
         coord.0 += vel.0 * TIMESTEP; //* time.delta_seconds();
         transform.translation = (coord.0 * SCALE).as_vec3();
+        trajectory.0.push(coord.0);
     }
 }
 
 pub fn draw_gizmos(
     mut gizmos: Gizmos,
-    bodies: Query<&Coord>,
+    bodies: Query<(&Coord, &Trajectory)>,
     camera: Query<&TargetZ, With<Camera>>,
 ) {
     let target_z = camera.single();
-    for coord in &bodies {
+    for (coord, trajectory) in &bodies {
         let r = (target_z.0 * 0.01 * SCALE) as f32;
         gizmos.circle_2d((coord.0 * SCALE).as_vec3().xy(), r, Color::RED);
+        for coords in trajectory.0.windows(2) {
+            gizmos.line(
+                (coords[0] * SCALE).as_vec3(),
+                (coords[1] * SCALE).as_vec3(),
+                Color::GRAY,
+            );
+        }
     }
 }
 
