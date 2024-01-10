@@ -2,7 +2,7 @@ use bevy::prelude::*;
 // use nalgebra::Vector3;
 use solar_system_sim::{
     attraction, draw_gizmos, look_at_target, scroll_camera, spawn_bodies, switch_track,
-    update_lerp, update_position,
+    update_labels, update_lerp, update_position,
 };
 
 fn main() {
@@ -16,7 +16,13 @@ fn main() {
         .add_systems(FixedUpdate, (attraction, update_position, update_lerp))
         .add_systems(
             Update,
-            (draw_gizmos, scroll_camera, switch_track, look_at_target),
+            (
+                draw_gizmos,
+                update_labels,
+                scroll_camera,
+                switch_track,
+                look_at_target,
+            ),
         )
         .run();
 }

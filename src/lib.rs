@@ -36,10 +36,17 @@ struct BodyBundle {
 #[derive(Default, Component)]
 struct Star;
 
+#[derive(Component)]
+pub struct Label {
+    entity: Entity,
+    coef: f32,
+}
+
 pub fn spawn_bodies(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
     mut config: ResMut<GizmoConfig>,
 ) {
     // Sun
@@ -52,7 +59,7 @@ pub fn spawn_bodies(
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
                     radius: (SUN_RADIUS * SCALE) as f32,
-                    subdivisions: 3,
+                    subdivisions: 10,
                 })
                 .unwrap(),
             ),
@@ -76,7 +83,7 @@ pub fn spawn_bodies(
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
                     radius: (MERCURY_RADIUS * SCALE) as f32,
-                    subdivisions: 3,
+                    subdivisions: 10,
                 })
                 .unwrap(),
             ),
@@ -96,7 +103,7 @@ pub fn spawn_bodies(
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
                     radius: (VENUS_RADIUS * SCALE) as f32,
-                    subdivisions: 3,
+                    subdivisions: 10,
                 })
                 .unwrap(),
             ),
@@ -116,7 +123,7 @@ pub fn spawn_bodies(
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
                     radius: (EARTH_RADIUS * SCALE) as f32,
-                    subdivisions: 3,
+                    subdivisions: 10,
                 })
                 .unwrap(),
             ),
@@ -140,7 +147,7 @@ pub fn spawn_bodies(
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
                     radius: (MOON_RADIUS * SCALE) as f32,
-                    subdivisions: 3,
+                    subdivisions: 10,
                 })
                 .unwrap(),
             ),
@@ -160,7 +167,7 @@ pub fn spawn_bodies(
             mesh: meshes.add(
                 Mesh::try_from(shape::Icosphere {
                     radius: (MARS_RADIUS * SCALE) as f32,
-                    subdivisions: 3,
+                    subdivisions: 10,
                 })
                 .unwrap(),
             ),
@@ -173,13 +180,14 @@ pub fn spawn_bodies(
         ..default()
     };
 
-    commands.spawn((sun, Star));
-    commands.spawn(mercury);
-    commands.spawn(venus);
-    commands.spawn(earth);
-    commands.spawn(moon);
-    commands.spawn(mars);
+    let sun = commands.spawn((sun, Star)).id();
+    let mercury = commands.spawn(mercury).id();
+    let venus = commands.spawn(venus).id();
+    let earth = commands.spawn(earth).id();
+    let moon = commands.spawn(moon).id();
+    let mars = commands.spawn(mars).id();
 
+    // Camera
     let position =
         Transform::from_xyz(0.0, 0.0, (AU * 3.0 * SCALE) as f32).looking_at(Vec3::ZERO, Vec3::Y);
     commands.spawn((
@@ -194,6 +202,46 @@ pub fn spawn_bodies(
     config.line_width = 3.0;
 
     commands.init_resource::<Lerp>();
+
+    // Label
+    let font = asset_server.load("PressStart2P-Regular.ttf");
+    let text_style = TextStyle {
+        font: font.clone(),
+        font_size: 15.0,
+        color: Color::WHITE,
+    };
+
+    let mut label = |entity: Entity, label: &str, coef: f32| {
+        commands
+            .spawn((
+                NodeBundle {
+                    style: Style {
+                        position_type: PositionType::Absolute,
+                        ..default()
+                    },
+                    ..default()
+                },
+                Label { coef, entity },
+            ))
+            .with_children(|parent| {
+                parent.spawn(
+                    TextBundle::from_section(label, text_style.clone())
+                        .with_style(Style {
+                            position_type: PositionType::Absolute,
+                            bottom: Val::ZERO,
+                            ..default()
+                        })
+                        .with_no_wrap(),
+                );
+            });
+    };
+
+    label(sun, "Sun", 6.0);
+    label(mercury, "Mercury", 0.02);
+    label(venus, "Venus", 0.05);
+    label(earth, "Earth", 0.05);
+    label(moon, "Moon", 0.01);
+    label(mars, "Mars", 0.03);
 }
 
 pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coord)>) {
@@ -214,7 +262,7 @@ pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coo
 
         let force1 = DVec3::new(x1, y1, z1);
 
-        vel1.0 += force1 * TIMESTEP; //time.delta_seconds();
+        vel1.0 += force1 * TIMESTEP;
 
         let diff2 = coord1.0 - coord2.0;
 
@@ -229,7 +277,7 @@ pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coo
 
         let force2 = DVec3::new(x2, y2, z2);
 
-        vel2.0 += force2 * TIMESTEP; //* time.delta_seconds();
+        vel2.0 += force2 * TIMESTEP;
     }
 }
 
@@ -257,6 +305,7 @@ pub fn draw_gizmos(
     for (coord, trajectory) in &bodies {
         let r = (target_z.0 * 0.01 * SCALE) as f32;
         gizmos.circle_2d((coord.0 * SCALE).as_vec3().xy(), r, Color::RED);
+
         for coords in trajectory.0.windows(2) {
             gizmos.line(
                 (coords[0] * SCALE).as_vec3(),
@@ -318,6 +367,26 @@ pub fn switch_track(
             0
         } else {
             ordinal.0 + 1
+        }
+    }
+}
+
+pub fn update_labels(
+    mut labels: Query<(&mut Style, &Label)>,
+    bodies: Query<&GlobalTransform>,
+    mut camera: Query<(&mut Camera, &GlobalTransform)>,
+) {
+    let (camera, camera_global_transform) = camera.single_mut();
+
+    for (mut style, label) in &mut labels {
+        let world_position = bodies.get(label.entity).unwrap().translation()
+            + Vec3::new(label.coef, -label.coef, 0.0);
+
+        if let Some(viewport_position) =
+            camera.world_to_viewport(camera_global_transform, world_position)
+        {
+            style.top = Val::Px(viewport_position.y);
+            style.left = Val::Px(viewport_position.x);
         }
     }
 }
