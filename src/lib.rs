@@ -39,8 +39,12 @@ struct Star;
 #[derive(Component)]
 pub struct Label {
     entity: Entity,
-    coef: f32,
+    shift: f32,
+    text: String,
 }
+
+#[derive(Component, Default)]
+pub struct Labled;
 
 pub fn spawn_bodies(
     mut commands: Commands,
@@ -221,18 +225,23 @@ pub fn spawn_bodies(
                     },
                     ..default()
                 },
-                Label { coef, entity },
+                Label {
+                    shift: coef,
+                    text: label.to_string(),
+                    entity,
+                },
             ))
             .with_children(|parent| {
-                parent.spawn(
-                    TextBundle::from_section(label, text_style.clone())
+                parent.spawn((
+                    TextBundle::from_section("", text_style.clone())
                         .with_style(Style {
                             position_type: PositionType::Absolute,
                             bottom: Val::ZERO,
                             ..default()
                         })
                         .with_no_wrap(),
-                );
+                    Labled,
+                ));
             });
     };
 
@@ -375,18 +384,23 @@ pub fn update_labels(
     mut labels: Query<(&mut Style, &Label)>,
     bodies: Query<&GlobalTransform>,
     mut camera: Query<(&mut Camera, &GlobalTransform)>,
+    mut label_text: Query<&mut Text, With<Labled>>,
 ) {
     let (camera, camera_global_transform) = camera.single_mut();
 
-    for (mut style, label) in &mut labels {
-        let world_position = bodies.get(label.entity).unwrap().translation()
-            + Vec3::new(label.coef, -label.coef, 0.0);
+    for ((mut style, label), mut text) in &mut labels.iter_mut().zip(&mut label_text) {
+        let world_position = bodies.get(label.entity).unwrap().translation();
+        let dist = world_position.length();
+        let world_position = world_position + Vec3::new(label.shift, -label.shift, 0.0);
 
         if let Some(viewport_position) =
             camera.world_to_viewport(camera_global_transform, world_position)
         {
             style.top = Val::Px(viewport_position.y);
             style.left = Val::Px(viewport_position.x);
+
+            text.sections[0].value =
+                format!("{}\n{:.4} AU", label.text, dist / (AU * SCALE) as f32);
         }
     }
 }
