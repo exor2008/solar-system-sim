@@ -8,7 +8,7 @@ use constants::*;
 pub struct Coord(DVec3);
 
 #[derive(Component, Default)]
-pub struct Velocity(DVec3);
+pub struct Velocity(Vec3);
 
 #[derive(Component, Default)]
 pub struct Mass(f64);
@@ -77,7 +77,7 @@ pub fn setup(
             ..default()
         },
         mass: Mass(SUN_MASS),
-        velocity: Velocity(DVec3::ZERO),
+        velocity: Velocity(Vec3::ZERO),
         coord: Coord(DVec3::ZERO),
         circle_size: CircleSize(0.015),
         ..default()
@@ -98,7 +98,9 @@ pub fn setup(
             ..default()
         },
         mass: Mass(MERCURY_MASS),
-        velocity: Velocity(DVec3::new(0.0, MERCURY_VEL, 0.0)),
+        velocity: Velocity(
+            Quat::from_rotation_x(MERCURY_INCLINATION) * Vec3::new(0.0, MERCURY_VEL, 0.0),
+        ),
         coord: Coord(DVec3::new(MERCURY_DISTANCE, 0.0, 0.0)),
         circle_size: CircleSize(0.01),
         ..default()
@@ -119,7 +121,9 @@ pub fn setup(
             ..default()
         },
         mass: Mass(VENUS_MASS),
-        velocity: Velocity(DVec3::new(0.0, VENUS_VEL, 0.0)),
+        velocity: Velocity(
+            Quat::from_rotation_x(VENUS_INCLINATION) * Vec3::new(0.0, VENUS_VEL, 0.0),
+        ),
         coord: Coord(DVec3::new(VENUS_DISTANCE, 0.0, 0.0)),
         circle_size: CircleSize(0.01),
         ..default()
@@ -140,7 +144,9 @@ pub fn setup(
             ..default()
         },
         mass: Mass(EARTH_MASS),
-        velocity: Velocity(DVec3::new(0.0, EARTH_VEL, 0.0)),
+        velocity: Velocity(
+            Quat::from_rotation_x(EARTH_INCLINATION) * Vec3::new(0.0, EARTH_VEL, 0.0),
+        ),
         coord: Coord(DVec3::new(EARTH_DISTANCE, 0.0, 0.0)),
         circle_size: CircleSize(0.01),
         ..default()
@@ -165,7 +171,10 @@ pub fn setup(
             ..default()
         },
         mass: Mass(MOON_MASS),
-        velocity: Velocity(DVec3::new(0.0, EARTH_VEL + MOON_VEL, 0.0)),
+        velocity: Velocity(
+            Quat::from_rotation_x(EARTH_INCLINATION) * Vec3::new(0.0, EARTH_VEL, 0.0)
+                + Quat::from_rotation_x(MOON_INCLINATION) * Vec3::new(0.0, MOON_VEL, 0.0),
+        ),
         coord: Coord(DVec3::new(EARTH_DISTANCE + MOON_DISTANCE, 0.0, 0.0)),
         circle_size: CircleSize(0.0075),
         ..default()
@@ -186,7 +195,7 @@ pub fn setup(
             ..default()
         },
         mass: Mass(MARS_MASS),
-        velocity: Velocity(DVec3::new(0.0, MARS_VEL, 0.0)),
+        velocity: Velocity(Quat::from_rotation_x(MARS_INCLINATION) * Vec3::new(0.0, MARS_VEL, 0.0)),
         coord: Coord(DVec3::new(MARS_DISTANCE, 0.0, 0.0)),
         circle_size: CircleSize(0.01),
         ..default()
@@ -283,7 +292,7 @@ pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coo
 
         let force1 = DVec3::new(x1, y1, z1);
 
-        vel1.0 += force1 * TIMESTEP;
+        vel1.0 += force1.as_vec3() * TIMESTEP;
 
         let diff2 = coord1.0 - coord2.0;
 
@@ -298,7 +307,7 @@ pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coo
 
         let force2 = DVec3::new(x2, y2, z2);
 
-        vel2.0 += force2 * TIMESTEP;
+        vel2.0 += force2.as_vec3() * TIMESTEP;
     }
 }
 
@@ -311,7 +320,7 @@ pub fn update_position(
     mut bodies: Query<(&Velocity, &mut Transform, &mut Coord, &mut Trajectory)>,
 ) {
     for (vel, mut transform, mut coord, mut trajectory) in &mut bodies {
-        coord.0 += vel.0 * TIMESTEP; //* time.delta_seconds();
+        coord.0 += (vel.0 * TIMESTEP).as_dvec3(); //* time.delta_seconds();
         transform.translation = (coord.0 * SCALE).as_vec3();
         trajectory.0.push(coord.0);
     }
@@ -324,8 +333,8 @@ pub fn draw_gizmos(
 ) {
     let camera = camera.single();
     for (coord, trajectory, circle) in &bodies {
-        let r = camera.radius.unwrap() * circle.0;
-        gizmos.circle_2d((coord.0 * SCALE).as_vec3().xy(), r, Color::RED);
+        let radius = camera.radius.unwrap() * circle.0;
+        gizmos.circle((coord.0 * SCALE).as_vec3(), Vec3::Z, radius, Color::RED);
 
         for coords in trajectory.0.windows(2) {
             gizmos.line(
