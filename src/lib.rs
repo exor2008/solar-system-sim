@@ -1,6 +1,7 @@
 pub mod constants;
 
-use bevy::{input::mouse::MouseWheel, math::DVec3, prelude::*};
+use bevy::{math::DVec3, prelude::*};
+use bevy_panorbit_camera::PanOrbitCamera;
 use constants::*;
 
 #[derive(Component, Default)]
@@ -16,13 +17,13 @@ pub struct Mass(f64);
 pub struct Ordinal(usize);
 
 #[derive(Component, Default)]
-pub struct TargetZ(f64);
-
-#[derive(Component, Default)]
 pub struct Trajectory(Vec<DVec3>);
 
+#[derive(Component, Default)]
+pub struct CircleSize(f32);
+
 #[derive(Resource, Default)]
-pub struct Lerp(f32);
+pub struct PanSoft(f32);
 
 #[derive(Default, Bundle)]
 struct BodyBundle {
@@ -31,6 +32,7 @@ struct BodyBundle {
     velocity: Velocity,
     coord: Coord,
     trajectory: Trajectory,
+    circle_size: CircleSize,
 }
 
 #[derive(Default, Component)]
@@ -46,7 +48,7 @@ pub struct Label {
 #[derive(Component, Default)]
 pub struct Labled;
 
-pub fn spawn_bodies(
+pub fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -77,6 +79,7 @@ pub fn spawn_bodies(
         mass: Mass(SUN_MASS),
         velocity: Velocity(DVec3::ZERO),
         coord: Coord(DVec3::ZERO),
+        circle_size: CircleSize(0.015),
         ..default()
     };
 
@@ -97,6 +100,7 @@ pub fn spawn_bodies(
         mass: Mass(MERCURY_MASS),
         velocity: Velocity(DVec3::new(0.0, MERCURY_VEL, 0.0)),
         coord: Coord(DVec3::new(MERCURY_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
         ..default()
     };
 
@@ -117,6 +121,7 @@ pub fn spawn_bodies(
         mass: Mass(VENUS_MASS),
         velocity: Velocity(DVec3::new(0.0, VENUS_VEL, 0.0)),
         coord: Coord(DVec3::new(VENUS_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
         ..default()
     };
 
@@ -137,6 +142,7 @@ pub fn spawn_bodies(
         mass: Mass(EARTH_MASS),
         velocity: Velocity(DVec3::new(0.0, EARTH_VEL, 0.0)),
         coord: Coord(DVec3::new(EARTH_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
         ..default()
     };
 
@@ -161,6 +167,7 @@ pub fn spawn_bodies(
         mass: Mass(MOON_MASS),
         velocity: Velocity(DVec3::new(0.0, EARTH_VEL + MOON_VEL, 0.0)),
         coord: Coord(DVec3::new(EARTH_DISTANCE + MOON_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.0075),
         ..default()
     };
 
@@ -181,6 +188,7 @@ pub fn spawn_bodies(
         mass: Mass(MARS_MASS),
         velocity: Velocity(DVec3::new(0.0, MARS_VEL, 0.0)),
         coord: Coord(DVec3::new(MARS_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
         ..default()
     };
 
@@ -200,18 +208,22 @@ pub fn spawn_bodies(
             ..default()
         },
         Ordinal(0),
-        TargetZ(AU * 3.0),
+        PanOrbitCamera {
+            radius: Some((AU * 3.0 * SCALE) as f32),
+            pan_smoothness: 0.0,
+            ..default()
+        },
     ));
 
     config.line_width = 3.0;
 
-    commands.init_resource::<Lerp>();
+    commands.init_resource::<PanSoft>();
 
     // Label
     let font = asset_server.load("PressStart2P-Regular.ttf");
     let text_style = TextStyle {
         font: font.clone(),
-        font_size: 15.0,
+        font_size: 12.0,
         color: Color::WHITE,
     };
 
@@ -290,9 +302,9 @@ pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coo
     }
 }
 
-pub fn update_lerp(mut lerp: ResMut<Lerp>) {
-    lerp.0 += 0.05;
-    lerp.0 = lerp.0.min(1.0);
+pub fn update_pansoft(mut pansoft: ResMut<PanSoft>) {
+    pansoft.0 -= 0.05;
+    pansoft.0 = pansoft.0.max(0.0);
 }
 
 pub fn update_position(
@@ -307,12 +319,12 @@ pub fn update_position(
 
 pub fn draw_gizmos(
     mut gizmos: Gizmos,
-    bodies: Query<(&Coord, &Trajectory)>,
-    camera: Query<&TargetZ, With<Camera>>,
+    bodies: Query<(&Coord, &Trajectory, &CircleSize)>,
+    camera: Query<&PanOrbitCamera>,
 ) {
-    let target_z = camera.single();
-    for (coord, trajectory) in &bodies {
-        let r = (target_z.0 * 0.01 * SCALE) as f32;
+    let camera = camera.single();
+    for (coord, trajectory, circle) in &bodies {
+        let r = camera.radius.unwrap() * circle.0;
         gizmos.circle_2d((coord.0 * SCALE).as_vec3().xy(), r, Color::RED);
 
         for coords in trajectory.0.windows(2) {
@@ -326,52 +338,38 @@ pub fn draw_gizmos(
 }
 
 pub fn look_at_target(
-    mut camera: Query<(&Ordinal, &TargetZ, &mut Transform, With<Camera>)>,
+    mut camera: Query<(&Ordinal, &mut PanOrbitCamera)>,
     bodies: Query<(&Coord, With<Mass>)>,
-    lerp: Res<Lerp>,
+    pansoft: Res<PanSoft>,
 ) {
-    let (ordinal, target_z, mut camera_transform, _) = camera.single_mut();
-
+    let (ordinal, mut camera) = camera.single_mut();
     let (coord, _) = bodies.iter().nth(ordinal.0).unwrap();
-
     let coord = (coord.0 * SCALE).as_vec3();
-    let new_target = Vec3::new(coord.x, coord.y, (target_z.0 * SCALE) as f32);
 
-    let new_translation = camera_transform.translation.lerp(new_target, lerp.0);
-    camera_transform.translation = new_translation;
+    camera.target_focus = coord;
+    camera.pan_smoothness = pansoft.0;
 }
 
-pub fn scroll_camera(
-    mut ev_scroll: EventReader<MouseWheel>,
-    mut camera: Query<&mut TargetZ, With<Camera>>,
-) {
-    let mut target_z = camera.single_mut();
-
-    for ev in ev_scroll.read() {
-        target_z.0 -= ev.y as f64 * (target_z.0) / 4.0;
-    }
-}
-
-pub fn switch_track(
+pub fn switch_focus_body(
     keyboard_input: Res<Input<KeyCode>>,
     bodies: Query<(&GlobalTransform, With<Mass>)>,
-    mut camera: Query<&mut Ordinal, With<Camera>>,
-    mut lerp: ResMut<Lerp>,
+    mut camera: Query<&mut Ordinal>,
+    mut pansoft: ResMut<PanSoft>,
 ) {
     let mut ordinal = camera.single_mut();
     let count = bodies.iter().count();
 
     if keyboard_input.just_pressed(KeyCode::Left) {
-        lerp.0 = 0.1;
+        pansoft.0 = 0.9;
         ordinal.0 = if ordinal.0 == 0 {
             count - 1
         } else {
             ordinal.0 - 1
-        }
+        };
     }
 
     if keyboard_input.just_pressed(KeyCode::Right) {
-        lerp.0 = 0.1;
+        pansoft.0 = 0.9;
         ordinal.0 = if ordinal.0 == count - 1 {
             0
         } else {
