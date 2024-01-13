@@ -279,6 +279,33 @@ pub fn setup(
         ..default()
     };
 
+    // Uranus
+    let uranus: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((URANUS_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (URANUS_RADIUS * SCALE) as f32,
+                    subdivisions: 10,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(StandardMaterial {
+                base_color: Color::rgb(0.0, 0.78, 0.78),
+                emissive: (Color::rgb(0.0, 0.78, 0.78) * 2.),
+                ..default()
+            }),
+            ..default()
+        },
+        mass: Mass(URANUS_MASS),
+        velocity: Velocity(
+            Quat::from_rotation_x(URANUS_INCLINATION) * Vec3::new(0.0, URANUS_VEL, 0.0),
+        ),
+        coord: Coord(DVec3::new(URANUS_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
+        ..default()
+    };
+
     let sun = commands.spawn((sun, Star)).id();
     let mercury = commands.spawn(mercury).id();
     let venus = commands.spawn(venus).id();
@@ -288,6 +315,7 @@ pub fn setup(
     let ceres = commands.spawn(ceres).id();
     let jupiter = commands.spawn(jupiter).id();
     let saturn = commands.spawn(saturn).id();
+    let uranus = commands.spawn(uranus).id();
 
     // Label
     let font = asset_server.load("PressStart2P-Regular.ttf");
@@ -342,6 +370,7 @@ pub fn setup(
     );
     label(jupiter, "Planet: Jupiter", 0.7, (AU * SCALE * 50.0) as f32);
     label(saturn, "Planet: Saturn", 0.6, (AU * SCALE * 50.0) as f32);
+    label(uranus, "Planet: Uranus", 0.5, (AU * SCALE * 50.0) as f32);
 
     // Camera
     let position =
@@ -359,7 +388,7 @@ pub fn setup(
         },
     ));
 
-    config.line_width = 1.5;
+    config.line_width = 2.0;
 
     commands.init_resource::<PanSoft>();
 }
@@ -418,18 +447,18 @@ pub fn update_position(
 
 pub fn draw_gizmos(
     mut gizmos: Gizmos,
-    bodies: Query<(&Coord, &Trajectory, &CircleSize)>,
-    camera: Query<(&PanOrbitCamera, &Transform)>,
+    bodies: Query<(&Coord, &Trajectory, &CircleSize, &Transform)>,
+    camera: Query<&Transform>,
 ) {
-    let (camera, camera_transform) = camera.single();
-    for (coord, trajectory, circle) in &bodies {
-        let radius = camera.radius.unwrap() * circle.0;
+    let camera_transform = camera.single();
+    for (coord, trajectory, circle, body_transform) in &bodies {
         let normal = camera_transform.rotation * Vec3::Z;
+        let dist_camera = (camera_transform.translation - body_transform.translation).length();
 
         gizmos.circle(
             (coord.0 * SCALE).as_vec3(),
             normal,
-            radius,
+            dist_camera * circle.0,
             Color::rgb(0.3, 0.0, 0.0),
         );
 

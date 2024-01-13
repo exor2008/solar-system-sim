@@ -13,6 +13,7 @@ pub const MARS_MASS: f64 = 6.4171 * 1e23;
 pub const CERES_MASS: f64 = 9.38392 * 1e20;
 pub const JUPITER_MASS: f64 = 1.8982 * 1e27;
 pub const SATURN_MASS: f64 = 5.6834 * 1e26;
+pub const URANUS_MASS: f64 = 8.6810 * 1e25;
 
 // Velocity, m/s
 pub const MERCURY_VEL: f32 = 4.736 * 1e4;
@@ -23,6 +24,7 @@ pub const MARS_VEL: f32 = 2.4077 * 1e4;
 pub const CERES_VEL: f32 = 1.79 * 1e4;
 pub const JUPITER_VEL: f32 = 1.307 * 1e4;
 pub const SATURN_VEL: f32 = 9.68 * 1e3;
+pub const URANUS_VEL: f32 = 6.8 * 1e3;
 
 // Rdius, m
 pub const SUN_RADIUS: f64 = 6.957 * 1e8;
@@ -34,6 +36,7 @@ pub const MARS_RADIUS: f64 = 3.3895 * 1e6;
 pub const CERES_RADIUS: f64 = 4.697 * 1e5;
 pub const JUPITER_RADIUS: f64 = 6.9911 * 1e7;
 pub const SATURN_RADIUS: f64 = 5.8232 * 1e7;
+pub const URANUS_RADIUS: f64 = 2.5362 * 1e7;
 
 // Distance, m
 pub const MERCURY_DISTANCE: f64 = 0.387 * AU;
@@ -44,6 +47,7 @@ pub const MARS_DISTANCE: f64 = 1.52 * AU;
 pub const CERES_DISTANCE: f64 = 2.8 * AU;
 pub const JUPITER_DISTANCE: f64 = 5.2 * AU;
 pub const SATURN_DISTANCE: f64 = 9.0 * AU;
+pub const URANUS_DISTANCE: f64 = 20.0 * AU;
 
 // Inclination, radians
 pub const MERCURY_INCLINATION: f32 = 0.05899212871740834;
@@ -54,3 +58,4 @@ pub const MARS_INCLINATION: f32 = 0.0322885911618951;
 pub const CERES_INCLINATION: f32 = 0.1684242728174528;
 pub const JUPITER_INCLINATION: f32 = 0.10629055144645466;
 pub const SATURN_INCLINATION: f32 = 0.09616764178488756;
+pub const URANUS_INCLINATION: f32 = 0.11309733552923257;
