@@ -202,12 +202,36 @@ pub fn setup(
         ..default()
     };
 
+    // Ceres
+    let ceres: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((CERES_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (CERES_RADIUS * SCALE) as f32,
+                    subdivisions: 10,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(Color::rgb(0.83, 0.35, 0.21).into()),
+            ..default()
+        },
+        mass: Mass(CERES_MASS),
+        velocity: Velocity(
+            Quat::from_rotation_x(CERES_INCLINATION) * Vec3::new(0.0, CERES_VEL, 0.0),
+        ),
+        coord: Coord(DVec3::new(CERES_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
+        ..default()
+    };
+
     let sun = commands.spawn((sun, Star)).id();
     let mercury = commands.spawn(mercury).id();
     let venus = commands.spawn(venus).id();
     let earth = commands.spawn(earth).id();
     let moon = commands.spawn(moon).id();
     let mars = commands.spawn(mars).id();
+    let ceres = commands.spawn(ceres).id();
 
     // Camera
     let position =
@@ -268,12 +292,18 @@ pub fn setup(
             });
     };
 
-    label(sun, "Star: Sun", 6.0, (AU * SCALE * 10.0) as f32);
-    label(mercury, "Planet: Mercury", 0.02, (AU * SCALE * 5.0) as f32);
-    label(venus, "Planet: Venus", 0.05, (AU * SCALE * 5.0) as f32);
-    label(earth, "Planet: Earth", 0.05, (AU * SCALE * 5.0) as f32);
+    label(sun, "Star: Sun", 6.0, (AU * SCALE * 100.0) as f32);
+    label(mercury, "Planet: Mercury", 0.02, (AU * SCALE * 10.0) as f32);
+    label(venus, "Planet: Venus", 0.05, (AU * SCALE * 10.0) as f32);
+    label(earth, "Planet: Earth", 0.05, (AU * SCALE * 10.0) as f32);
     label(moon, "Satellite: Moon", 0.01, (AU * SCALE * 0.1) as f32);
-    label(mars, "Planet: Mars", 0.03, (AU * SCALE * 5.0) as f32);
+    label(mars, "Planet: Mars", 0.03, (AU * SCALE * 10.0) as f32);
+    label(
+        ceres,
+        "Dwarf Planet: Ceres",
+        0.005,
+        (AU * SCALE * 10.0) as f32,
+    );
 }
 
 pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coord)>) {
