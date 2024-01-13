@@ -43,6 +43,7 @@ pub struct Label {
     entity: Entity,
     shift: f32,
     text: String,
+    threshold: f32,
 }
 
 #[derive(Component, Default)]
@@ -224,7 +225,7 @@ pub fn setup(
         },
     ));
 
-    config.line_width = 3.0;
+    config.line_width = 1.5;
 
     commands.init_resource::<PanSoft>();
 
@@ -233,10 +234,10 @@ pub fn setup(
     let text_style = TextStyle {
         font: font.clone(),
         font_size: 12.0,
-        color: Color::WHITE,
+        color: Color::ANTIQUE_WHITE,
     };
 
-    let mut label = |entity: Entity, label: &str, coef: f32| {
+    let mut label = |entity: Entity, label: &str, shift: f32, threshold: f32| {
         commands
             .spawn((
                 NodeBundle {
@@ -247,9 +248,10 @@ pub fn setup(
                     ..default()
                 },
                 Label {
-                    shift: coef,
+                    shift,
                     text: label.to_string(),
                     entity,
+                    threshold,
                 },
             ))
             .with_children(|parent| {
@@ -266,12 +268,12 @@ pub fn setup(
             });
     };
 
-    label(sun, "Sun", 6.0);
-    label(mercury, "Mercury", 0.02);
-    label(venus, "Venus", 0.05);
-    label(earth, "Earth", 0.05);
-    label(moon, "Moon", 0.01);
-    label(mars, "Mars", 0.03);
+    label(sun, "Star: Sun", 6.0, (AU * SCALE * 10.0) as f32);
+    label(mercury, "Planet: Mercury", 0.02, (AU * SCALE * 5.0) as f32);
+    label(venus, "Planet: Venus", 0.05, (AU * SCALE * 5.0) as f32);
+    label(earth, "Planet: Earth", 0.05, (AU * SCALE * 5.0) as f32);
+    label(moon, "Satellite: Moon", 0.01, (AU * SCALE * 0.1) as f32);
+    label(mars, "Planet: Mars", 0.03, (AU * SCALE * 5.0) as f32);
 }
 
 pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coord)>) {
@@ -329,21 +331,38 @@ pub fn update_position(
 pub fn draw_gizmos(
     mut gizmos: Gizmos,
     bodies: Query<(&Coord, &Trajectory, &CircleSize)>,
-    camera: Query<&PanOrbitCamera>,
+    camera: Query<(&PanOrbitCamera, &Transform)>,
 ) {
-    let camera = camera.single();
+    let (camera, camera_transform) = camera.single();
     for (coord, trajectory, circle) in &bodies {
         let radius = camera.radius.unwrap() * circle.0;
-        gizmos.circle((coord.0 * SCALE).as_vec3(), Vec3::Z, radius, Color::RED);
+        let normal = camera_transform.rotation * Vec3::Z;
+
+        gizmos.circle(
+            (coord.0 * SCALE).as_vec3(),
+            normal,
+            radius,
+            Color::rgb(0.3, 0.0, 0.0),
+        );
 
         for coords in trajectory.0.windows(2) {
             gizmos.line(
                 (coords[0] * SCALE).as_vec3(),
                 (coords[1] * SCALE).as_vec3(),
-                Color::GRAY,
+                Color::DARK_GRAY,
             );
         }
     }
+    gizmos.line(
+        Vec3::X * 2.0 * (AU * SCALE) as f32,
+        -Vec3::X * 2.0 * (AU * SCALE) as f32,
+        Color::MIDNIGHT_BLUE,
+    );
+    gizmos.line(
+        Vec3::Y * 2.0 * (AU * SCALE) as f32,
+        -Vec3::Y * 2.0 * (AU * SCALE) as f32,
+        Color::SEA_GREEN,
+    );
 }
 
 pub fn look_at_target(
@@ -396,9 +415,10 @@ pub fn update_labels(
     let (camera, camera_global_transform) = camera.single_mut();
 
     for ((mut style, label), mut text) in &mut labels.iter_mut().zip(&mut label_text) {
-        let world_position = bodies.get(label.entity).unwrap().translation();
-        let dist = world_position.length();
-        let world_position = world_position + Vec3::new(label.shift, -label.shift, 0.0);
+        let body_transform = bodies.get(label.entity).unwrap();
+        let dist = body_transform.translation().length();
+        let world_position =
+            body_transform.translation() + Vec3::new(label.shift, -label.shift, 0.0);
 
         if let Some(viewport_position) =
             camera.world_to_viewport(camera_global_transform, world_position)
@@ -406,8 +426,13 @@ pub fn update_labels(
             style.top = Val::Px(viewport_position.y);
             style.left = Val::Px(viewport_position.x);
 
-            text.sections[0].value =
-                format!("{}\n{:.4} AU", label.text, dist / (AU * SCALE) as f32);
+            let dist_camera = (camera_global_transform.translation() - world_position).length();
+
+            text.sections[0].value = if dist_camera <= label.threshold {
+                format!("{}\n{:.4} AU", label.text, dist / (AU * SCALE) as f32)
+            } else {
+                "".to_string()
+            };
         }
     }
 }

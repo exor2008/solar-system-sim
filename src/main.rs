@@ -10,6 +10,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(PanOrbitCameraPlugin)
+        .insert_resource(ClearColor(Color::rgb(0.01, 0.0, 0.05)))
         .insert_resource(AmbientLight {
             brightness: 1.0,
             ..default()
