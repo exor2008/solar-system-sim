@@ -213,7 +213,7 @@ pub fn setup(
                 })
                 .unwrap(),
             ),
-            material: materials.add(Color::rgb(0.83, 0.35, 0.21).into()),
+            material: materials.add(Color::rgb(0.7, 0.7, 0.7).into()),
             ..default()
         },
         mass: Mass(CERES_MASS),
@@ -225,6 +225,60 @@ pub fn setup(
         ..default()
     };
 
+    // Jupiter
+    let jupiter: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((JUPITER_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (JUPITER_RADIUS * SCALE) as f32,
+                    subdivisions: 10,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(StandardMaterial {
+                base_color: Color::rgb(0.76, 0.4, 0.11),
+                emissive: (Color::rgb(0.76, 0.4, 0.11) * 2.),
+                ..default()
+            }),
+            ..default()
+        },
+        mass: Mass(JUPITER_MASS),
+        velocity: Velocity(
+            Quat::from_rotation_x(JUPITER_INCLINATION) * Vec3::new(0.0, JUPITER_VEL, 0.0),
+        ),
+        coord: Coord(DVec3::new(JUPITER_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
+        ..default()
+    };
+
+    // Saturn
+    let saturn: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((SATURN_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (SATURN_RADIUS * SCALE) as f32,
+                    subdivisions: 10,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(StandardMaterial {
+                base_color: Color::rgb(0.53, 0.45, 0.28),
+                emissive: (Color::rgb(0.53, 0.45, 0.28) * 2.),
+                ..default()
+            }),
+            ..default()
+        },
+        mass: Mass(SATURN_MASS),
+        velocity: Velocity(
+            Quat::from_rotation_x(SATURN_INCLINATION) * Vec3::new(0.0, SATURN_VEL, 0.0),
+        ),
+        coord: Coord(DVec3::new(SATURN_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
+        ..default()
+    };
+
     let sun = commands.spawn((sun, Star)).id();
     let mercury = commands.spawn(mercury).id();
     let venus = commands.spawn(venus).id();
@@ -232,26 +286,8 @@ pub fn setup(
     let moon = commands.spawn(moon).id();
     let mars = commands.spawn(mars).id();
     let ceres = commands.spawn(ceres).id();
-
-    // Camera
-    let position =
-        Transform::from_xyz(0.0, 0.0, (AU * 3.0 * SCALE) as f32).looking_at(Vec3::ZERO, Vec3::Y);
-    commands.spawn((
-        Camera3dBundle {
-            transform: position,
-            ..default()
-        },
-        Ordinal(0),
-        PanOrbitCamera {
-            radius: Some((AU * 3.0 * SCALE) as f32),
-            pan_smoothness: 0.0,
-            ..default()
-        },
-    ));
-
-    config.line_width = 1.5;
-
-    commands.init_resource::<PanSoft>();
+    let jupiter = commands.spawn(jupiter).id();
+    let saturn = commands.spawn(saturn).id();
 
     // Label
     let font = asset_server.load("PressStart2P-Regular.ttf");
@@ -302,8 +338,30 @@ pub fn setup(
         ceres,
         "Dwarf Planet: Ceres",
         0.005,
-        (AU * SCALE * 10.0) as f32,
+        (AU * SCALE * 50.0) as f32,
     );
+    label(jupiter, "Planet: Jupiter", 0.7, (AU * SCALE * 50.0) as f32);
+    label(saturn, "Planet: Saturn", 0.6, (AU * SCALE * 50.0) as f32);
+
+    // Camera
+    let position =
+        Transform::from_xyz(0.0, 0.0, (AU * 3.0 * SCALE) as f32).looking_at(Vec3::ZERO, Vec3::Y);
+    commands.spawn((
+        Camera3dBundle {
+            transform: position,
+            ..default()
+        },
+        Ordinal(0),
+        PanOrbitCamera {
+            radius: Some((AU * 3.0 * SCALE) as f32),
+            pan_smoothness: 0.0,
+            ..default()
+        },
+    ));
+
+    config.line_width = 1.5;
+
+    commands.init_resource::<PanSoft>();
 }
 
 pub fn attraction(_time: Res<Time>, mut query: Query<(&Mass, &mut Velocity, &Coord)>) {
