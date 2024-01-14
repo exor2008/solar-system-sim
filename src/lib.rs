@@ -306,6 +306,56 @@ pub fn setup(
         ..default()
     };
 
+    // Neptune
+    let neptune: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((NEPTUNE_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (NEPTUNE_RADIUS * SCALE) as f32,
+                    subdivisions: 10,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(StandardMaterial {
+                base_color: Color::rgb(0.02, 0.26, 0.82),
+                emissive: (Color::rgb(0.02, 0.26, 0.82) * 2.),
+                ..default()
+            }),
+            ..default()
+        },
+        mass: Mass(NEPTUNE_MASS),
+        velocity: Velocity(
+            Quat::from_rotation_x(NEPTUNE_INCLINATION) * Vec3::new(0.0, NEPTUNE_VEL, 0.0),
+        ),
+        coord: Coord(DVec3::new(NEPTUNE_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
+        ..default()
+    };
+
+    // Pluto
+    let pluto: BodyBundle = BodyBundle {
+        pbr: PbrBundle {
+            transform: Transform::from_xyz((PLUTO_DISTANCE * SCALE) as f32, 0.0, 0.0),
+            mesh: meshes.add(
+                Mesh::try_from(shape::Icosphere {
+                    radius: (PLUTO_RADIUS * SCALE) as f32,
+                    subdivisions: 10,
+                })
+                .unwrap(),
+            ),
+            material: materials.add(Color::rgb(0.69, 0.55, 0.43).into()),
+            ..default()
+        },
+        mass: Mass(PLUTO_MASS),
+        velocity: Velocity(
+            Quat::from_rotation_x(PLUTO_INCLINATION) * Vec3::new(0.0, PLUTO_VEL, 0.0),
+        ),
+        coord: Coord(DVec3::new(PLUTO_DISTANCE, 0.0, 0.0)),
+        circle_size: CircleSize(0.01),
+        ..default()
+    };
+
     let sun = commands.spawn((sun, Star)).id();
     let mercury = commands.spawn(mercury).id();
     let venus = commands.spawn(venus).id();
@@ -316,6 +366,8 @@ pub fn setup(
     let jupiter = commands.spawn(jupiter).id();
     let saturn = commands.spawn(saturn).id();
     let uranus = commands.spawn(uranus).id();
+    let neptune = commands.spawn(neptune).id();
+    let pluto = commands.spawn(pluto).id();
 
     // Label
     let font = asset_server.load("PressStart2P-Regular.ttf");
@@ -356,7 +408,7 @@ pub fn setup(
             });
     };
 
-    label(sun, "Star: Sun", 6.0, (AU * SCALE * 100.0) as f32);
+    label(sun, "Star: Sun", 6.0, (AU * SCALE * 150.0) as f32);
     label(mercury, "Planet: Mercury", 0.02, (AU * SCALE * 10.0) as f32);
     label(venus, "Planet: Venus", 0.05, (AU * SCALE * 10.0) as f32);
     label(earth, "Planet: Earth", 0.05, (AU * SCALE * 10.0) as f32);
@@ -366,11 +418,18 @@ pub fn setup(
         ceres,
         "Dwarf Planet: Ceres",
         0.005,
-        (AU * SCALE * 50.0) as f32,
+        (AU * SCALE * 100.0) as f32,
     );
-    label(jupiter, "Planet: Jupiter", 0.7, (AU * SCALE * 50.0) as f32);
-    label(saturn, "Planet: Saturn", 0.6, (AU * SCALE * 50.0) as f32);
-    label(uranus, "Planet: Uranus", 0.5, (AU * SCALE * 50.0) as f32);
+    label(jupiter, "Planet: Jupiter", 0.7, (AU * SCALE * 100.0) as f32);
+    label(saturn, "Planet: Saturn", 0.6, (AU * SCALE * 100.0) as f32);
+    label(uranus, "Planet: Uranus", 0.5, (AU * SCALE * 100.0) as f32);
+    label(neptune, "Planet: Neptune", 0.5, (AU * SCALE * 100.0) as f32);
+    label(
+        pluto,
+        "Dwarf Planet: Pluto",
+        0.01,
+        (AU * SCALE * 100.0) as f32,
+    );
 
     // Camera
     let position =
@@ -448,7 +507,7 @@ pub fn update_position(
 pub fn draw_gizmos(
     mut gizmos: Gizmos,
     bodies: Query<(&Coord, &Trajectory, &CircleSize, &Transform)>,
-    camera: Query<&Transform>,
+    camera: Query<&Transform, With<Camera>>,
 ) {
     let camera_transform = camera.single();
     for (coord, trajectory, circle, body_transform) in &bodies {
